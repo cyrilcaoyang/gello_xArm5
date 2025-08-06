@@ -201,6 +201,52 @@ class DynamixelDriver(DynamixelDriverProtocol):
 
         self._torque_enabled = enable
 
+    def lock_current_position(self):
+        """Lock motors at their current positions by enabling torque.
+        
+        When torque is enabled, Dynamixel motors automatically hold their current position.
+        No need to read positions or set goal positions - just enable torque!
+        """
+        if self._torque_enabled:
+            print("Warning: Torque already enabled. Motors may already be locked.")
+            return
+        
+        # Enable torque - motor will automatically lock at current position
+        self.set_torque_mode(True)
+        
+        print("🔒 Motors locked at current positions")
+        print("   (Torque enabled - motors will resist movement)")
+
+    def unlock_position(self):
+        """Unlock motors by disabling torque, allowing manual movement."""
+        if not self._torque_enabled:
+            print("Motors are already unlocked.")
+            return
+            
+        self.set_torque_mode(False)
+        print("🔓 Motors unlocked - can be moved manually")
+
+    def lock_at_position(self, positions: Sequence[float]):
+        """Lock motors at specific positions.
+        
+        Args:
+            positions: List of joint angles in radians
+        """
+        if len(positions) != len(self._ids):
+            raise ValueError(f"Expected {len(self._ids)} positions, got {len(positions)}")
+        
+        # Enable torque
+        self.set_torque_mode(True)
+        
+        # Command to specified positions
+        self.set_joints(positions)
+        
+        print(f"🔒 Motors locked at target positions: {np.degrees(positions):.1f} degrees")
+
+    def is_locked(self) -> bool:
+        """Check if motors are currently locked (torque enabled)."""
+        return self._torque_enabled
+
     def _start_reading_thread(self):
         self._reading_thread = Thread(target=self._read_joint_angles)
         self._reading_thread.daemon = True

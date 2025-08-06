@@ -11,14 +11,23 @@ cd gello_software
 </p>
 
 
-## Use your own enviroment
-```
+## Installation
+
+```bash
 git submodule init
 git submodule update
-pip install -r requirements.txt
+
+# Install GELLO (includes all robot support)
 pip install -e .
+
+# Install DynamixelSDK for GELLO device
 pip install -e third_party/DynamixelSDK/python
+
+# For development (optional - adds dev tools)
+pip install -e ".[dev]"
 ```
+
+**Note:** Some packages like `pyrealsense2` may need manual installation on certain platforms.
 
 ## Use with Docker
 First install ```docker``` following this [link](https://docs.docker.com/engine/install/ubuntu/) on your host machine.
@@ -91,7 +100,8 @@ python scripts/gello_get_offset.py \
 * UR: `1 1 -1 1 1 1`
 * Panda: `1 -1 1 1 1 -1 1`
 * FR3: `1 1 1 1 1 -1 1`
-* xArm: `1 1 1 1 1 1 1`
+* xArm7: `1 1 1 1 1 1 1`
+* xArm5: `1 1 1 1 1`
 
 The script prints out a list of joint offsets. Go to `gello/agents/gello_agent.py` and add a DynamixelRobotConfig to the PORT_CONFIG_MAP. You are now ready to run your GELLO!
 
@@ -104,7 +114,7 @@ For multiprocessing, we leverage [ZMQ](https://zeromq.org/)
 First test your GELLO with a simulated robot to make sure that the joint angles match as expected.
 In one terminal run
 ```
-python experiments/launch_nodes.py --robot <sim_ur, sim_panda, or sim_xarm>
+python experiments/launch_nodes.py --robot <sim_ur, sim_panda, sim_xarm, or sim_xarm5>
 ```
 This launched the robot node. A simulated robot using the mujoco viewer should appear.
 
@@ -121,7 +131,7 @@ Before you run with the real robot, you will have to install a robot specific py
 The supported robots are in `gello/robots`.
  * UR: [ur_rtde](https://sdurobotics.gitlab.io/ur_rtde/installation/installation.html)
  * panda: [polymetis](https://facebookresearch.github.io/fairo/polymetis/installation.html). If you use a different framework to control the panda, the code is easy to adpot. See/Modify `gello/robots/panda.py`
- * xArm: [xArm python SDK](https://github.com/xArm-Developer/xArm-Python-SDK)
+ * xArm5-7: [xArm python SDK](https://github.com/xArm-Developer/xArm-Python-SDK)
 
 ```
 # Launch all of the node
@@ -145,6 +155,62 @@ python gello/data_utils/demo_to_gdict.py --source-dir=<source dir location>
 GELLO also be used in bimanual configurations.
 For an example, see the `bimanual_ur` robot in `launch_nodes.py` and `--bimanual` flag in the `run_env.py` script.
 
+## xArm5 Support
+
+This repository now includes support for the xArm5 robot (5 DOF + gripper). The xArm5 robot provides a more compact and cost-effective alternative to the xArm7 while maintaining essential manipulation capabilities.
+
+### Key Differences from xArm7:
+- **Degrees of Freedom**: 5 joints + gripper (6 total DOF) vs 7 joints + gripper (8 total DOF)
+- **Robot Class**: Use `XArm5Robot` instead of `XArmRobot`
+- **Joint Configuration**: Uses 5-element joint arrays instead of 7-element arrays
+
+### Usage Examples:
+
+**Testing in simulation:**
+```bash
+# Launch xArm5 simulation
+python experiments/launch_nodes.py --robot sim_xarm5
+
+# In another terminal, launch GELLO
+python experiments/run_env.py --agent=gello
+```
+
+**Real robot control:**
+```bash
+# Launch xArm5 real robot
+python experiments/launch_nodes.py --robot xarm5 --robot-ip 192.168.1.226
+
+# In another terminal, launch GELLO
+python experiments/run_env.py --agent=gello
+```
+
+**Example script:**
+```bash
+# Run comprehensive xArm5 demo
+python scripts/xarm5_example.py --sim --demo all
+
+# Or with real robot
+python scripts/xarm5_example.py --real --ip 192.168.1.226 --demo basic
+```
+
+### GELLO Configuration for xArm5:
+If using GELLO for teleoperation, configure the joint mapping in `gello/agents/gello_agent.py` with 5 joints:
+```python
+# xArm5 (5 DOF) - Example configuration
+"/dev/serial/by-id/your-device-id": DynamixelRobotConfig(
+    joint_ids=(1, 2, 3, 4, 5),
+    joint_offsets=(
+        2 * np.pi / 2,
+        2 * np.pi / 2, 
+        2 * np.pi / 2,
+        2 * np.pi / 2,
+        -1 * np.pi / 2 + 2 * np.pi,
+    ),
+    joint_signs=(1, 1, 1, 1, 1),
+    gripper_config=(6, 279, 279 - 50),
+),
+```
+
 ## Notes
 Due to the use of multiprocessing, sometimes python process are not killed properly. We have provided the kill_nodes script which will kill the
 python processes.
@@ -154,7 +220,7 @@ python processes.
 
 ### Using a new robot!
 If you want to use a new robot you need a GELLO that is compatible. If the kiniamtics are close enough, you may directly use an existing GELLO. Otherwise you will have to design your own.
-To add a new robot, simply implement the `Robot` protocol found in `gello/robots/robot`. See `gello/robots/panda.py`, `gello/robots/ur.py`, `gello/robots/xarm_robot.py` for examples.
+To add a new robot, simply implement the `Robot` protocol found in `gello/robots/robot`. See `gello/robots/panda.py`, `gello/robots/ur.py`, `gello/robots/xarm_robot.py`, `gello/robots/xarm5_robot.py` for examples.
 
 ### Contributing
 Please make a PR if you would like to contribute! The goal of this project is to enable more accessible and higher quality teleoperation devices and we would love your input!
