@@ -53,12 +53,29 @@ def launch_robot_server(args: Args):
             xml_path=xml, gripper_xml_path=gripper_xml, port=port, host=args.hostname
         )
         server.serve()
+    elif args.robot == "sim_xarm5":
+        from gello.robots.sim_robot import MujocoRobotServer
+
+        MENAGERIE_ROOT: Path = (
+            Path(__file__).parent.parent / "third_party" / "mujoco_menagerie"
+        )
+        # Note: if ufactory_xarm5 doesn't exist, we can use xarm7 model but with 5-joint control
+        xml = MENAGERIE_ROOT / "ufactory_xarm7" / "xarm7.xml"  # Fallback to xarm7 model
+        gripper_xml = None
+        server = MujocoRobotServer(
+            xml_path=xml, gripper_xml_path=gripper_xml, port=port, host=args.hostname
+        )
+        server.serve()
 
     else:
         if args.robot == "xarm":
             from gello.robots.xarm_robot import XArmRobot
 
             robot = XArmRobot(ip=args.robot_ip)
+        elif args.robot == "xarm5":
+            from gello.robots.xarm5_robot import XArm5Robot
+
+            robot = XArm5Robot(ip=args.robot_ip)
         elif args.robot == "ur":
             from gello.robots.ur import URRobot
 
@@ -79,7 +96,7 @@ def launch_robot_server(args: Args):
 
         else:
             raise NotImplementedError(
-                f"Robot {args.robot} not implemented, choose one of: sim_ur, xarm, ur, bimanual_ur, none"
+                f"Robot {args.robot} not implemented, choose one of: sim_ur, sim_xarm, sim_xarm5, xarm, xarm5, ur, bimanual_ur, none"
             )
         server = ZMQServerRobot(robot, port=port, host=args.hostname)
         print(f"Starting robot server on port {port}")

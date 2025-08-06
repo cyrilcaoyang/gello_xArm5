@@ -1,0 +1,138 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gello"
+version = "0.0.1"
+description = "Software for GELLO (Generalized and Efficient Low-cost Low-latency Teleoperation)"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Yang Cao", email = "cyrilcaoyang@gmail.com"},
+    {name = "Philipp Wu", email = "philippwu@berkeley.edu"}
+]
+maintainers = [
+    {name = "Yang Cao", email = "cyrilcaoyang@gmail.com"}
+]
+keywords = ["robotics", "teleoperation", "gello", "xarm", "dynamixel"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Human Machine Interfaces",
+]
+requires-python = ">=3.8"
+
+# All dependencies needed for GELLO
+dependencies = [
+    "numpy",
+    "pyquaternion", 
+    "termcolor",
+    "tyro",
+    "zmq",
+    "dynamixel_sdk",
+    "xarm",
+    "xarm-python-sdk",
+    "ur-rtde",
+    "Pillow",
+    "pyspacemouse",
+    "dm_control",
+    "pygame", 
+    "PyQt6",
+    "quaternion",
+    "numpy-quaternion",
+    "pure-python-adb",
+]
+
+[project.urls]
+Homepage = "https://wuphilipp.github.io/gello_site/"
+Repository = "https://github.com/wuphilipp/gello_software"
+Documentation = "https://wuphilipp.github.io/gello_site/"
+"Bug Tracker" = "https://github.com/wuphilipp/gello_software/issues"
+
+[project.optional-dependencies]
+# Development tools
+dev = [
+    "black",
+    "flake8", 
+    "flake8-docstrings",
+    "isort",
+    "mypy",
+    "pyright", 
+    "pytest",
+    "ipdb",
+    "jupyterlab",
+    "python-lsp-server[all]",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gello*"]
+
+[tool.setuptools.package-data]
+gello = ["*.xml", "*.yaml", "*.yml"]
+
+# Development tool configurations
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | third_party
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["gello"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = [
+    "dm_control.*",
+    "dynamixel_sdk.*",
+    "pygame.*",
+    "pyspacemouse.*",
+    "pyrealsense2.*",
+    "ur_rtde.*",
+    "xarm.*",
+    "zmq.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short" 

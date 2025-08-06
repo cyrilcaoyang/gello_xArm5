@@ -1,3 +1,39 @@
+"""
+GELLO Dynamixel Robot Interface
+
+This module implements the DynamixelRobot class, which provides a high-level interface
+for controlling GELLO teleoperation devices built with Dynamixel servo motors.
+
+GELLO (Generalized and Efficient Low-cost Low-latency Teleoperation) is a physical
+device that mimics the joint structure of robotic arms, allowing humans to intuitively
+control robots through direct manipulation. The device consists of multiple Dynamixel
+servo motors arranged in the same kinematic configuration as the target robot.
+
+Key Components:
+- DynamixelRobot: Main class for GELLO device control
+- Coordinate transformations: Convert between motor encoders and joint angles
+- Position locking: Enable/disable motor torque for different operation modes
+- Gripper support: Handle gripper motors with position mapping
+- Teleoperation interface: Provide joint states for robot control
+
+Usage:
+    # Create GELLO device from configuration
+    from gello.agents.gello_agent import PORT_CONFIG_MAP
+    config = PORT_CONFIG_MAP["/dev/serial/by-id/your-device-id"]
+    gello = config.make_robot(port="/dev/serial/by-id/your-device-id")
+    
+    # Read joint positions for teleoperation
+    joint_positions = gello.get_joint_state()
+    
+    # Lock/unlock motors
+    gello.lock_current_position()  # Hold current pose
+    gello.unlock_position()        # Allow free movement
+
+The class handles all the low-level details of Dynamixel communication, coordinate
+transformations, and provides a clean interface that matches the Robot protocol
+used throughout the GELLO system.
+"""
+
 from typing import Dict, Optional, Sequence, Tuple
 
 import numpy as np
@@ -6,7 +42,23 @@ from gello.robots.robot import Robot
 
 
 class DynamixelRobot(Robot):
-    """A class representing a UR robot."""
+    """A class representing a GELLO teleoperation device built with Dynamixel motors.
+    
+    This class provides a high-level interface for controlling a physical GELLO device,
+    which is used as an input controller for robot teleoperation. The GELLO device
+    consists of multiple Dynamixel servo motors arranged to mimic the joint structure
+    of target robots.
+    
+    Key features:
+    - Joint position reading for teleoperation input
+    - Motor torque control (lock/unlock positions)  
+    - Coordinate transformations (joint offsets and signs)
+    - Gripper support for manipulation tasks
+    - Exponential smoothing for stable position readings
+    
+    The class handles the conversion between raw motor encoder values and 
+    meaningful joint angles in the robot's coordinate system.
+    """
 
     def __init__(
         self,
@@ -132,6 +184,59 @@ class DynamixelRobot(Robot):
             return
         self._driver.set_torque_mode(mode)
         self._torque_on = mode
+
+    def lock_current_position(self):
+        """Lock GELLO at its current position by enabling torque.
+        
+        This powers the motors and holds them at their current joint angles,
+        preventing manual movement. Useful for:
+        - Holding a specific pose during robot operation
+        - Preventing accidental movement during calibration
+        - Creating a stable reference position
+        """
+        self._driver.lock_current_position()
+        self._torque_on = True
+
+    def unlock_position(self):
+        """Unlock GELLO by disabling torque, allowing manual movement.
+        
+        This is the normal teleoperation mode where you can freely move
+        the GELLO device and it will track the movements.
+        """
+        self._driver.unlock_position()
+        self._torque_on = False
+
+    def lock_at_joint_angles(self, joint_angles: np.ndarray):
+        """Lock GELLO at specific joint angles.
+        
+        Args:
+            joint_angles: Target joint angles in the robot's coordinate system
+        """
+        if len(joint_angles) != len(self._joint_ids):
+            if self.gripper_open_close is not None and len(joint_angles) == len(self._joint_ids) - 1:
+                # Add gripper position if not provided
+                current_state = self.get_joint_state()
+                joint_angles = np.append(joint_angles, current_state[-1])
+            else:
+                raise ValueError(f"Expected {len(self._joint_ids)} joint angles, got {len(joint_angles)}")
+        
+        # Convert to raw motor positions
+        raw_positions = (joint_angles * self._joint_signs + self._joint_offsets).tolist()
+        
+        self._driver.lock_at_position(raw_positions)
+        self._torque_on = True
+        print(f"🤖 GELLO locked at target joint angles: {joint_angles}")
+
+    def is_locked(self) -> bool:
+        """Check if GELLO is currently locked (motors powered)."""
+        return self._driver.is_locked()
+
+    def get_lock_status(self) -> str:
+        """Get human-readable lock status."""
+        if self.is_locked():
+            return "🔒 LOCKED (motors powered, position held)"
+        else:
+            return "🔓 UNLOCKED (free movement, ready for teleoperation)"
 
     def get_observations(self) -> Dict[str, np.ndarray]:
         return {"joint_state": self.get_joint_state()}
