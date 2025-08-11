@@ -89,15 +89,43 @@ class ZMQRobotServer:
         self._context = zmq.Context()
         self._socket = self._context.socket(zmq.REP)
         addr = f"tcp://{host}:{port}"
-        self._socket.bind(addr)
+        
+        try:
+            self._socket.bind(addr)
+            print(f"ZMQ Server bound to {addr}")
+        except zmq.error.ZMQError as e:
+            print(f"Failed to bind to {addr}: {e}")
+            # Try to find an available port
+            for try_port in range(port, port + 10):
+                try_addr = f"tcp://{host}:{try_port}"
+                try:
+                    self._socket.bind(try_addr)
+                    print(f"ZMQ Server bound to {try_addr} (port {port} was in use)")
+                    break
+                except zmq.error.ZMQError:
+                    continue
+            else:
+                raise Exception(f"Could not bind to any port from {port} to {port+9}")
+        
         self._stop_event = threading.Event()
 
     def serve(self) -> None:
         """Serve the robot state and commands over ZMQ."""
-        self._socket.setsockopt(zmq.RCVTIMEO, 1000)  # Set timeout to 1000 ms
+        print(f"ZMQ Server listening and ready for connections...")
+        
+        # Remove timeout to avoid spam - use blocking recv
+        # self._socket.setsockopt(zmq.RCVTIMEO, 1000)
+        
         while not self._stop_event.is_set():
             try:
-                message = self._socket.recv()
+                # Use non-blocking recv with short timeout to allow checking stop event
+                try:
+                    message = self._socket.recv(zmq.NOBLOCK)
+                except zmq.error.Again:
+                    # No message available, continue loop to check stop event
+                    time.sleep(0.01)  # Small delay to prevent busy waiting
+                    continue
+                    
                 request = pickle.loads(message)
 
                 # Call the appropriate method based on the request
@@ -120,9 +148,10 @@ class ZMQRobotServer:
                     )
 
                 self._socket.send(pickle.dumps(result))
-            except zmq.error.Again:
-                print("Timeout in ZMQLeaderServer serve")
-                # Timeout occurred, check if the stop event is set
+            except KeyboardInterrupt:
+                print("Received interrupt signal, stopping server...")
+                self._stop_event.set()
+                break
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -218,16 +247,18 @@ class MujocoRobotServer:
     def serve(self) -> None:
         # start the zmq server
         self._zmq_server_thread.start()
-        with mujoco.viewer.launch_passive(self._model, self._data) as viewer:
-            while viewer.is_running():
-                step_start = time.time()
+        
+        try:
+            with mujoco.viewer.launch_passive(self._model, self._data) as viewer:
+                print("MuJoCo viewer started. Close the viewer window or press Ctrl+C to stop.")
+                while viewer.is_running():
+                    step_start = time.time()
 
-                # mj_step can be replaced with code that also evaluates
-                # a policy and applies a control signal before stepping the physics.
-                self._data.ctrl[:] = self._joint_cmd
-                # self._data.qpos[:] = self._joint_cmd
-                mujoco.mj_step(self._model, self._data)
-                self._joint_state = self._data.qpos.copy()[: self._num_joints]
+                    # mj_step can be replaced with code that also evaluates
+                    # a policy and applies a control signal before stepping the physics.
+                    self._data.ctrl[:] = self._joint_cmd
+                    mujoco.mj_step(self._model, self._data)
+                    self._joint_state = self._data.qpos.copy()[: self._num_joints]
 
                 if self._print_joints:
                     print(self._joint_state)
@@ -248,9 +279,19 @@ class MujocoRobotServer:
                 )
                 if time_until_next_step > 0:
                     time.sleep(time_until_next_step)
+                    
+        except KeyboardInterrupt:
+            print("Received interrupt signal, stopping simulation...")
+        except Exception as e:
+            print(f"Error in simulation: {e}")
+        finally:
+            self.stop()
 
     def stop(self) -> None:
-        self._zmq_server_thread.join()
+        print("Stopping ZMQ server...")
+        self._zmq_server.stop()
+        if hasattr(self, '_zmq_server_thread'):
+            self._zmq_server_thread.join()
 
     def __del__(self) -> None:
         self.stop()

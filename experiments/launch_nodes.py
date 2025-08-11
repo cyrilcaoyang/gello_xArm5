@@ -1,3 +1,5 @@
+import signal
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,7 +46,7 @@ def launch_robot_server(args: Args):
         xml = MENAGERIE_ROOT / "franka_emika_panda" / "panda.xml"
         gripper_xml = None
         server = MujocoRobotServer(
-            xml_path=str(xml), gripper_xml_path=str(gripper_xml), port=port, host=args.hostname
+            xml_path=str(xml), gripper_xml_path=gripper_xml, port=port, host=args.hostname
         )
         server.serve()
     elif args.robot == "sim_xarm":
@@ -53,7 +55,17 @@ def launch_robot_server(args: Args):
         xml = MENAGERIE_ROOT / "ufactory_xarm7" / "xarm7.xml"
         gripper_xml = None
         server = MujocoRobotServer(
-            xml_path=str(xml), gripper_xml_path=str(gripper_xml), port=port, host=args.hostname
+            xml_path=str(xml), gripper_xml_path=gripper_xml, port=port, host=args.hostname
+        )
+        server.serve()
+    elif args.robot == "sim_xarm5":
+        from gello.robots.sim_xarm5_robot import MujocoXArm5Server
+
+        # Use xArm7 model but with joint mapping for xArm5 (joints 1,2,4,6,7)
+        xml = MENAGERIE_ROOT / "ufactory_xarm7" / "xarm7.xml"
+        gripper_xml = None
+        server = MujocoXArm5Server(
+            xml_path=str(xml), gripper_xml_path=gripper_xml, port=port, host=args.hostname
         )
         server.serve()
 
@@ -62,6 +74,10 @@ def launch_robot_server(args: Args):
             from gello.robots.xarm_robot import XArmRobot
 
             robot = XArmRobot(ip=args.robot_ip)
+        elif args.robot == "xarm5":
+            from gello.robots.xarm5_robot import XArm5Robot
+
+            robot = XArm5Robot(ip=args.robot_ip)
         elif args.robot == "ur":
             from gello.robots.ur import URRobot
 
@@ -86,15 +102,33 @@ def launch_robot_server(args: Args):
 
         else:
             raise NotImplementedError(
-                f"Robot {args.robot} not implemented, choose one of: sim_ur, xarm, ur, bimanual_ur, none"
+                f"Robot {args.robot} not implemented, choose one of: sim_ur, sim_xarm, sim_xarm5, sim_panda, sim_yam, xarm, xarm5, ur, bimanual_ur, yam, none"
             )
         server = ZMQServerRobot(robot, port=port, host=args.hostname)
         print(f"Starting robot server on port {port}")
         server.serve()
 
 
+def signal_handler(sig, frame):
+    """Handle Ctrl+C gracefully"""
+    print("\nReceived interrupt signal. Shutting down...")
+    sys.exit(0)
+
+
 def main(args):
-    launch_robot_server(args)
+    # Set up signal handler for Ctrl+C
+    signal.signal(signal.SIGINT, signal_handler)
+    print(f"Starting robot server for: {args.robot}")
+    print("Press Ctrl+C to stop the server")
+    
+    try:
+        launch_robot_server(args)
+    except KeyboardInterrupt:
+        print("\nShutdown requested by user")
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        print("Server stopped")
 
 
 if __name__ == "__main__":

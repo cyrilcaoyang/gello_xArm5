@@ -44,7 +44,7 @@ class DynamixelRobotConfig:
 
 
 PORT_CONFIG_MAP: Dict[str, DynamixelRobotConfig] = {
-    # xArm5 Configuration for COM5
+    # xArm5 Configuration for COM5 - Tested and verified
     "COM5": DynamixelRobotConfig(
         joint_ids=(1, 2, 3, 4, 5),
         joint_offsets=(
